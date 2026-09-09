@@ -18,7 +18,8 @@ def test_worker_declares_wan_720p_contract() -> None:
     source = (ROOT / "handler.py").read_text()
     assert '"Wan-AI/Wan2.2-TI2V-5B"' in source
     assert 'TASK = "ti2v-5B"' in source
-    assert 'SIZE_KEY = "1280*704"' in source
+    assert '"1280*704"' in source and '"832*480"' in source
+    assert "unsupported size" in source
     assert "huggingface-cache" in source
     assert "resolve_cached_model" in source
     assert "casefold()" in source

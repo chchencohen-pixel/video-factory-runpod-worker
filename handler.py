@@ -31,7 +31,10 @@ if str(WAN_ROOT) not in sys.path:
 MODEL_ID = os.getenv("WAN_MODEL_ID", "Wan-AI/Wan2.2-TI2V-5B")
 HF_CACHE_ROOT = Path(os.getenv("RUNPOD_HF_CACHE", "/runpod-volume/huggingface-cache/hub"))
 TASK = "ti2v-5B"
-SIZE_KEY = "1280*704"
+# Supported output sizes (Wan 2.2 TI2V-5B official presets). The app sends width/height;
+# anything else is rejected instead of silently producing a different resolution.
+SIZE_KEYS = {(1280, 704): "1280*704", (704, 1280): "704*1280", (832, 480): "832*480", (480, 832): "480*832"}
+DEFAULT_SIZE = (1280, 704)
 # Knobs for smaller GPUs. Defaults target a 48GB card: everything on the GPU, no offload.
 T5_CPU = os.getenv("WAN_T5_CPU", "false").lower() == "true"
 OFFLOAD_MODEL = os.getenv("WAN_OFFLOAD_MODEL", "false").lower() == "true"
@@ -175,6 +178,11 @@ def generate(job_input: dict[str, Any]) -> dict[str, Any]:
         return fail(str(error))
     if not 3 <= steps <= 50:
         return fail("steps must be between 3 and 50")
+    width = int(job_input.get("width", DEFAULT_SIZE[0]))
+    height = int(job_input.get("height", DEFAULT_SIZE[1]))
+    size_key = SIZE_KEYS.get((width, height))
+    if not size_key:
+        return fail(f"unsupported size {width}x{height}; use one of {sorted(f'{w}x{h}' for w, h in SIZE_KEYS)}")
 
     try:
         model = get_model()
@@ -199,8 +207,8 @@ def generate(job_input: dict[str, Any]) -> dict[str, Any]:
         video = model.generate(
             prompt,
             img=img,
-            size=SIZE_CONFIGS[SIZE_KEY],
-            max_area=MAX_AREA_CONFIGS[SIZE_KEY],
+            size=SIZE_CONFIGS[size_key],
+            max_area=MAX_AREA_CONFIGS[size_key],
             frame_num=frames,
             shift=cfg.sample_shift,
             sample_solver="unipc",
@@ -231,7 +239,7 @@ def generate(job_input: dict[str, Any]) -> dict[str, Any]:
         return {
             "ok": True,
             "mode": mode,
-            "resolution": "1280x704",
+            "resolution": f"{width}x{height}",
             "frames": frames,
             "steps": steps,
             "seed": seed,
